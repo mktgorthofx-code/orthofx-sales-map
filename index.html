@@ -30,7 +30,8 @@
     max-width: 220px;
   }
   #tooltip strong { display: block; font-size: 13px; margin-bottom: 2px; }
-  #tooltip span { font-size: 12px; color: #5F5E5A; }
+  #tooltip .tt-rep { font-size: 12px; color: #3C3C3A; }
+  #tooltip .tt-terr { font-size: 11px; color: #888780; }
   #legend {
     display: flex;
     flex-wrap: wrap;
@@ -41,7 +42,7 @@
     max-width: 1100px;
   }
   .legend-item { display: flex; align-items: center; gap: 6px; }
-  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.12); }
   #status { margin-top: 10px; font-size: 11px; color: #AAA89E; }
   #error { margin-top: 10px; font-size: 13px; color: #A32D2D; display: none; }
 </style>
@@ -49,13 +50,15 @@
 <body>
 
 <h1>OrthoFX — AE Territory Coverage</h1>
-<p class="subtitle" id="subtitle">Loading territory data...</p>
-
+<p class="subtitle" id="subtitle">Loading...</p>
 <div id="map-wrap">
   <svg id="map" viewBox="0 0 975 610" xmlns="http://www.w3.org/2000/svg"></svg>
-  <div id="tooltip"><strong id="tt-name"></strong><span id="tt-rep"></span><br><span id="tt-territory" style="font-size:11px;color:#888"></span></div>
+  <div id="tooltip">
+    <strong id="tt-name"></strong>
+    <span class="tt-rep" id="tt-rep"></span><br>
+    <span class="tt-terr" id="tt-terr"></span>
+  </div>
 </div>
-
 <div id="legend"></div>
 <div id="status"></div>
 <div id="error"></div>
@@ -65,208 +68,199 @@
 <script>
 (async function () {
 
-  const RELAY = 'https://script.google.com/macros/s/AKfycbw0fIw9KbEzw71ulIXfcY5SslB3_8nV8Qodc37pb7i_0jGs4R1pEDrVvHi25UeTN6zYVA/exec';
-  const TERRITORIES_URL = RELAY + '?sheet=Territories';
-  const COUNTIES_URL    = RELAY + '?sheet=Split%20State%20Counties';
+  const RELAY        = 'https://script.google.com/macros/s/AKfycbw0fIw9KbEzw71ulIXfcY5SslB3_8nV8Qodc37pb7i_0jGs4R1pEDrVvHi25UeTN6zYVA/exec';
+  const TERR_URL     = RELAY + '?sheet=Territories';
+  const COUNTY_URL   = RELAY + '?sheet=Split%20State%20Counties';
+  const TOPO_URL     = 'https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json';
 
-  const STATE_NAME = {AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'District of Columbia'};
-  const NAME_TO_ABBR = Object.fromEntries(Object.entries(STATE_NAME).map(([a,n])=>[n,a]));
-
-  // Colors matched to mapchart.net original
+  // Colors matched exactly to mapchart.net export
   const REP_COLORS = {
-    'Lisa Medeiros':  '#969696',
-    'Tim Franklin':   '#b2df8a',
-    'Patrick Welch':  '#80b1d3',
-    'Celia Farbo':    '#fdbf6f',
-    'Jessica Baker':  '#fddaec',
-    'Open':           '#f781bf',
-    'Jared Levy':     '#377eb8',
-    'Becky Evans':    '#ff7f00',
-    'Danny Poelman':  '#ffff33',
-    'Sabrina Orlando':'#fed976',
-    'Shema Muhiga':   '#decbe4',
-    'Khaled Edwan':   '#7bccc4',
-    'Katie Starkey':  '#d9b400',
-    'Sydney Reist':   '#a6cee3',
+    'Lisa Medeiros':   '#969696',
+    'Tim Franklin':    '#b2df8a',
+    'Patrick Welch':   '#80b1d3',
+    'Celia Farbo':     '#fdbf6f',
+    'Jessica Baker':   '#fddaec',
+    'Open':            '#f781bf',
+    'Jared Levy':      '#377eb8',
+    'Becky Evans':     '#ff7f00',
+    'Danny Poelman':   '#ffff33',
+    'Sabrina Orlando': '#fed976',
+    'Shema Muhiga':    '#decbe4',
+    'Khaled Edwan':    '#7bccc4',
+    'Katie Starkey':   '#d9b400',
+    'Sydney Reist':    '#a6cee3',
   };
-  const FALLBACK_COLORS = ['#8dd3c7','#ffffb3','#bebada','#fb8072','#80b1d3','#fdb462','#b3de69','#fccde5','#bc80bd','#ccebc5'];
+  const FALLBACK = ['#8dd3c7','#ffffb3','#bebada','#fb8072','#fdb462','#b3de69','#bc80bd','#ccebc5'];
+  const repColorCache = {};
   let fallbackIdx = 0;
 
   function colorFor(rep) {
-    if (!rep) return '#d1dbdd';
-    const repLower = (rep || '').toLowerCase();
-    const key = Object.keys(REP_COLORS).find(k => repLower.includes(k.split(' ')[1].toLowerCase()) || rep === k);
-    if (key) return REP_COLORS[key];
-    if (!colorFor._map) colorFor._map = {};
-    if (!colorFor._map[rep]) {
-      colorFor._map[rep] = FALLBACK_COLORS[fallbackIdx % FALLBACK_COLORS.length];
-      fallbackIdx++;
-    }
-    return colorFor._map[rep];
+    if (!rep || typeof rep !== 'string' || rep.trim() === '') return '#d1dbdd';
+    if (repColorCache[rep]) return repColorCache[rep];
+    // Try exact match first
+    if (REP_COLORS[rep]) { repColorCache[rep] = REP_COLORS[rep]; return REP_COLORS[rep]; }
+    // Try last-name partial match
+    const repLower = rep.toLowerCase();
+    const match = Object.keys(REP_COLORS).find(k => {
+      const parts = k.split(' ');
+      const lastName = (parts[1] || '').toLowerCase();
+      return lastName && repLower.includes(lastName);
+    });
+    const color = match ? REP_COLORS[match] : FALLBACK[fallbackIdx++ % FALLBACK.length];
+    repColorCache[rep] = color;
+    return color;
   }
 
-  function rowsToObjects(rows) {
-    const header = rows[0];
-    return rows.slice(1).filter(r => r.some(c => String(c).trim())).map(r => {
-      const o = {};
-      header.forEach((h, i) => o[String(h).trim()] = r[i] !== undefined ? String(r[i]).trim() : '');
-      return o;
+  // Convert Apps Script JSON array-of-arrays to array-of-objects using header row
+  function toObjects(rows) {
+    if (!Array.isArray(rows) || rows.length < 2) return [];
+    const header = rows[0].map(h => String(h || '').trim());
+    return rows.slice(1).filter(r => Array.isArray(r) && r.some(c => String(c || '').trim() !== '')).map(r => {
+      const obj = {};
+      header.forEach((h, i) => { obj[h] = String(r[i] !== undefined && r[i] !== null ? r[i] : '').trim(); });
+      return obj;
     });
   }
 
-  const statusEl   = document.getElementById('status');
-  const subtitleEl = document.getElementById('subtitle');
-  const legendEl   = document.getElementById('legend');
-  const errorEl    = document.getElementById('error');
-  const tooltipEl  = document.getElementById('tooltip');
-  const ttName     = document.getElementById('tt-name');
-  const ttRep      = document.getElementById('tt-rep');
-  const ttTerritory= document.getElementById('tt-territory');
+  const STATE_NAME = {AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'District of Columbia'};
+  const NAME_TO_ABBR = {};
+  Object.entries(STATE_NAME).forEach(([a, n]) => { NAME_TO_ABBR[n] = a; });
+
+  const errorEl  = document.getElementById('error');
+  const statusEl = document.getElementById('status');
+  const subEl    = document.getElementById('subtitle');
+  const legendEl = document.getElementById('legend');
+  const ttEl     = document.getElementById('tooltip');
+  const ttName   = document.getElementById('tt-name');
+  const ttRep    = document.getElementById('tt-rep');
+  const ttTerr   = document.getElementById('tt-terr');
 
   try {
-    statusEl.textContent = 'Fetching territory data from Google Sheets...';
+    statusEl.textContent = 'Fetching territory data...';
 
-    const [terrRes, countyRes, usTopo] = await Promise.all([
-      fetch(TERRITORIES_URL).then(r => r.json()),
-      fetch(COUNTIES_URL).then(r => r.json()),
-      d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json')
+    const [terrRaw, countyRaw, usTopo] = await Promise.all([
+      fetch(TERR_URL).then(r => { if (!r.ok) throw new Error('Territories fetch failed: ' + r.status); return r.json(); }),
+      fetch(COUNTY_URL).then(r => { if (!r.ok) throw new Error('Counties fetch failed: ' + r.status); return r.json(); }),
+      d3.json(TOPO_URL)
     ]);
 
-    const terrRows   = rowsToObjects(terrRes);
-    const countyRows = rowsToObjects(countyRes);
+    const terrRows   = toObjects(terrRaw);
+    const countyRows = toObjects(countyRaw);
 
-    // Build state → {rep, territory} for whole states
-    const stateToRep = {};
-    const stateToTerritory = {};
+    // Map whole states → rep/territory
+    const stateRep  = {};
+    const stateTerr = {};
     terrRows.forEach(r => {
-      const states = (r['State(s)'] || '').split(',').map(s => s.trim()).filter(Boolean);
-      states.forEach(abbr => {
-        stateToRep[abbr] = r['Sales Rep'];
-        stateToTerritory[abbr] = r['Territory'];
+      (r['State(s)'] || '').split(',').map(s => s.trim()).filter(Boolean).forEach(abbr => {
+        stateRep[abbr]  = r['Sales Rep'] || '';
+        stateTerr[abbr] = r['Territory'] || '';
       });
     });
 
-    // Build county → rep for split states
+    // Map county → rep/territory for split states
     const splitStates = new Set();
-    const countyKey = {}; // "CA::los angeles" → {rep, territory}
+    const countyMap   = {}; // "CA::los angeles" → {rep, terr}
     countyRows.forEach(r => {
-      const state  = (r['State'] || '').trim();
-      const county = (r['County'] || '').trim().toLowerCase();
-      const rep    = (r['Sales Rep'] || '').trim();
-      const terr   = (r['Territory'] || '').trim();
-      if (state && county && county.trim() !== "") {
+      const state  = (r['State']      || '').trim();
+      const county = (r['County']     || '').trim();
+      const rep    = (r['Sales Rep']  || '').trim();
+      const terr   = (r['Territory']  || '').trim();
+      if (state && county && rep) {
         splitStates.add(state);
-        countyKey[state + '::' + county] = { rep, territory: terr };
+        countyMap[state + '::' + county.toLowerCase()] = { rep, terr };
       }
     });
 
-    const statesGeo  = topojson.feature(usTopo, usTopo.objects.states).features;
-    const countiesGeo= topojson.feature(usTopo, usTopo.objects.counties).features;
+    const statesGeo   = topojson.feature(usTopo, usTopo.objects.states).features;
+    const countiesGeo = topojson.feature(usTopo, usTopo.objects.counties).features;
 
-    // Build FIPS → state abbr
+    // Build FIPS (zero-padded 2-digit string) → state abbreviation
+    // us-atlas state IDs are numeric (e.g. 1 for Alabama, 55 for Wisconsin)
     const fipsToAbbr = {};
     statesGeo.forEach(f => {
-      const abbr = NAME_TO_ABBR[f.properties.name];
-      if (abbr) fipsToAbbr[String(f.id).padStart(2,'0')] = abbr;
+      const fips2 = String(f.id).padStart(2, '0');   // "1" → "01", "55" → "55"
+      const abbr  = NAME_TO_ABBR[f.properties.name];
+      if (abbr) fipsToAbbr[fips2] = abbr;
     });
 
     const proj = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
-    const path = d3.geoPath(proj);
+    const geoPath = d3.geoPath(proj);
     const svg  = d3.select('#map');
     const g    = svg.append('g');
 
-    function attachTooltip(sel, name, rep, territory) {
+    function tooltip(sel, name, rep, terr) {
       sel.style('cursor', 'pointer')
-        .on('mouseenter', function() {
+        .on('mouseenter', () => {
           ttName.textContent = name;
-          ttRep.textContent = rep || 'Unassigned';
-          ttTerritory.textContent = territory || '';
-          tooltipEl.style.display = 'block';
+          ttRep.textContent  = rep  || 'Unassigned';
+          ttTerr.textContent = terr || '';
+          ttEl.style.display = 'block';
         })
-        .on('mousemove', function(ev) {
-          tooltipEl.style.left = (ev.clientX + 14) + 'px';
-          tooltipEl.style.top  = (ev.clientY + 14) + 'px';
+        .on('mousemove', ev => {
+          ttEl.style.left = (ev.clientX + 14) + 'px';
+          ttEl.style.top  = (ev.clientY + 14) + 'px';
         })
-        .on('mouseleave', function() {
-          tooltipEl.style.display = 'none';
-        });
+        .on('mouseleave', () => { ttEl.style.display = 'none'; });
     }
 
-    // Draw whole states (skip split states)
+    // 1. Draw whole states (non-split)
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
       if (!abbr || splitStates.has(abbr)) return;
-      const rep  = stateToRep[abbr];
-      const terr = stateToTerritory[abbr];
-      const sel  = g.append('path')
-        .attr('d', path(f))
-        .attr('fill', colorFor(rep))
-        .attr('stroke', '#ffffff')
-        .attr('stroke-width', 0.8);
-      attachTooltip(sel, STATE_NAME[abbr] || f.properties.name, rep, terr);
+      const rep  = stateRep[abbr]  || '';
+      const terr = stateTerr[abbr] || '';
+      tooltip(
+        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep)).attr('stroke', '#fff').attr('stroke-width', 0.8),
+        STATE_NAME[abbr] || f.properties.name, rep, terr
+      );
     });
 
-    // Draw counties for split states
+    // 2. Draw counties for split states
     countiesGeo.forEach(f => {
-      const stateFips = String(f.id).padStart(5,'0').slice(0,2);
-      const abbr = fipsToAbbr[stateFips];
+      // County FIPS id in us-atlas is a 4-or-5 digit number; zero-pad to 5, first 2 = state FIPS
+      const fips5    = String(f.id).padStart(5, '0');
+      const stateFips = fips5.slice(0, 2);
+      const abbr     = fipsToAbbr[stateFips];
       if (!abbr || !splitStates.has(abbr)) return;
-      const countyName = (f.properties && f.properties.name) ? f.properties.name : '';
-      if (!countyName) return;
-      const lookup = countyKey[abbr + '::' + countyName.toLowerCase()];
-      const rep  = lookup ? lookup.rep : null;
-      const terr = lookup ? lookup.territory : null;
-      const sel  = g.append('path')
-        .attr('d', path(f))
-        .attr('fill', colorFor(rep))
-        .attr('stroke', '#ffffff')
-        .attr('stroke-width', 0.3);
-      attachTooltip(sel, countyName + ' County, ' + abbr, rep, terr);
+      const cName  = (f.properties && f.properties.name) ? f.properties.name : '';
+      if (!cName) return;
+      const entry  = countyMap[abbr + '::' + cName.toLowerCase()];
+      const rep    = entry ? entry.rep  : '';
+      const terr   = entry ? entry.terr : '';
+      tooltip(
+        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep)).attr('stroke', '#fff').attr('stroke-width', 0.3),
+        cName + ' County, ' + abbr, rep, terr
+      );
     });
 
-    // Draw state borders on top for split states (visual clarity)
+    // 3. Overlay crisp state borders on split states
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
       if (!abbr || !splitStates.has(abbr)) return;
-      g.append('path')
-        .attr('d', path(f))
-        .attr('fill', 'none')
-        .attr('stroke', '#525252')
-        .attr('stroke-width', 0.8)
-        .attr('pointer-events', 'none');
+      g.append('path').attr('d', geoPath(f)).attr('fill', 'none').attr('stroke', '#525252').attr('stroke-width', 0.9).attr('pointer-events', 'none');
     });
 
-    // Build legend — unique reps in order of territory appearance
+    // 4. Build legend
     const seenReps = new Map();
-    terrRows.forEach(r => {
-      if (r['Sales Rep'] && !seenReps.has(r['Sales Rep']))
-        seenReps.set(r['Sales Rep'], r['Territory']);
-    });
-    countyRows.forEach(r => {
-      if (r['Sales Rep'] && !seenReps.has(r['Sales Rep']))
-        seenReps.set(r['Sales Rep'], r['Territory']);
-    });
+    terrRows.forEach(r => { if (r['Sales Rep'] && !seenReps.has(r['Sales Rep'])) seenReps.set(r['Sales Rep'], r['Territory']); });
+    countyRows.forEach(r => { if (r['Sales Rep'] && !seenReps.has(r['Sales Rep'])) seenReps.set(r['Sales Rep'], r['Territory']); });
 
     legendEl.innerHTML = '';
-    seenReps.forEach((territory, rep) => {
+    seenReps.forEach((terr, rep) => {
       const item = document.createElement('span');
       item.className = 'legend-item';
-      item.innerHTML = `<span class="legend-swatch" style="background:${colorFor(rep)};border:1px solid rgba(0,0,0,0.12)"></span>${rep} <span style="color:#AAA89E;font-size:11px;margin-left:2px">(${territory})</span>`;
+      item.innerHTML = `<span class="legend-swatch" style="background:${colorFor(rep)}"></span>${rep} <span style="color:#AAA89E;font-size:11px;margin-left:2px">(${terr})</span>`;
       legendEl.appendChild(item);
     });
 
-    const unassigned = document.createElement('span');
-    unassigned.className = 'legend-item';
-    unassigned.innerHTML = `<span class="legend-swatch" style="background:#d1dbdd;border:1px solid rgba(0,0,0,0.12)"></span>Unassigned`;
-    legendEl.appendChild(unassigned);
-
-    subtitleEl.textContent = 'AE Coverage Q3-2026';
+    subEl.textContent    = 'AE Coverage Q3-2026';
     statusEl.textContent = 'Live data · Last loaded ' + new Date().toLocaleString();
 
-  } catch(err) {
+  } catch (err) {
     errorEl.style.display = 'block';
-    errorEl.textContent = 'Error loading map: ' + err.message;
-    statusEl.textContent = '';
+    errorEl.textContent   = 'Error loading map: ' + err.message;
+    statusEl.textContent  = '';
+    console.error(err);
   }
 
 })();
