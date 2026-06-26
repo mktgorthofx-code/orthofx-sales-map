@@ -14,11 +14,8 @@
   }
   h1 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
   .subtitle { font-size: 12px; color: #888780; margin-bottom: 14px; }
-
-  /* Toggle */
   #toggle-wrap {
     display: flex;
-    gap: 0;
     margin-bottom: 16px;
     border: 1px solid #D3D1C7;
     border-radius: 8px;
@@ -36,12 +33,8 @@
     transition: background 0.15s, color 0.15s;
   }
   .toggle-btn:first-child { border-right: 1px solid #D3D1C7; }
-  .toggle-btn.active {
-    background: #1F4E79;
-    color: #ffffff;
-  }
+  .toggle-btn.active { background: #1F4E79; color: #ffffff; }
   .toggle-btn:hover:not(.active) { background: #F0EFE9; }
-
   #map-wrap { width: 100%; max-width: 1100px; position: relative; }
   #map { width: 100%; display: block; }
   #tooltip {
@@ -107,7 +100,6 @@
   const COUNTY_URL = RELAY + '?sheet=Split%20State%20Counties';
   const TOPO_URL   = 'https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json';
 
-  // AE colors — matched exactly to mapchart.net export
   const AE_COLORS = {
     'Lisa Medeiros':   '#969696',
     'Tim Franklin':    '#b2df8a',
@@ -125,7 +117,6 @@
     'Sydney Reist':    '#a6cee3',
   };
 
-  // ISP colors — distinct palette
   const ISP_COLORS = {
     'Nicole Richardson': '#4393c3',
     'Rita Demerjian':    '#74c476',
@@ -138,19 +129,17 @@
   const colorCache = {};
   function colorFor(rep, group) {
     if (!rep || typeof rep !== 'string' || !rep.trim()) return '#d1dbdd';
-    const cacheKey = group + '::' + rep;
-    if (colorCache[cacheKey]) return colorCache[cacheKey];
+    const key = group + '::' + rep;
+    if (colorCache[key]) return colorCache[key];
     const palette = group === 'ISP' ? ISP_COLORS : AE_COLORS;
-    // Exact match
-    if (palette[rep]) { colorCache[cacheKey] = palette[rep]; return palette[rep]; }
-    // Last-name partial match
+    if (palette[rep]) { colorCache[key] = palette[rep]; return palette[rep]; }
     const repLower = rep.toLowerCase();
     const match = Object.keys(palette).find(k => {
       const last = (k.split(' ')[1] || '').toLowerCase();
       return last && repLower.includes(last);
     });
-    const color = match ? palette[match] : '#bdbdbd';
-    colorCache[cacheKey] = color;
+    const color = match ? palette[match] : '#d1dbdd';
+    colorCache[key] = color;
     return color;
   }
 
@@ -179,70 +168,62 @@
   const ttRep    = document.getElementById('tt-rep');
   const ttTerr   = document.getElementById('tt-terr');
 
-  // Shared data — loaded once
-  let terrRows   = [];
-  let countyRows = [];
-  let usTopo     = null;
-  let statesGeo  = [];
-  let countiesGeo= [];
-  let fipsToAbbr = {};
-  let currentView = 'AE';
+  let terrRows = [], countyRows = [], statesGeo = [], countiesGeo = [], fipsToAbbr = {};
 
-  function buildStateMaps(group) {
-    // Whole-state rep/territory maps for this group
-    const stateRep  = {};
-    const stateTerr = {};
-    let defaultRep  = null;
-    let defaultTerr = null;
+  function parseData(group) {
+    // DEFAULT reps — one for AE (Katie), one for ISP (Krista)
+    let defaultRep = null, defaultTerr = null;
+    const stateRep = {}, stateTerr = {};
 
     terrRows.forEach(r => {
       const g = (r['Group'] || '').trim().toUpperCase();
       const states = (r['State(s)'] || '').split(',').map(s => s.trim()).filter(Boolean);
 
       if (g === 'DEFAULT') {
-        // For ISP, empty states = true catch-all fallback
-        // For AE, Katie has real states listed
-        if (group === 'ISP' && states.length === 0) {
+        // AE default (Katie) has no states listed; ISP default (Krista) has no states either
+        // Both are pure catch-alls — determine which group they belong to by Territory name
+        const terr = (r['Territory'] || '').toLowerCase();
+        const isISPDefault = terr.includes('isp') || terr.includes('manager');
+        if ((group === 'ISP' && isISPDefault) || (group === 'AE' && !isISPDefault)) {
           defaultRep  = r['Sales Rep'];
           defaultTerr = r['Territory'];
-        } else if (group === 'AE' && states.length > 0) {
-          states.forEach(abbr => { stateRep[abbr] = r['Sales Rep']; stateTerr[abbr] = r['Territory']; });
         }
       } else if (g === group) {
-        states.forEach(abbr => { stateRep[abbr] = r['Sales Rep']; stateTerr[abbr] = r['Territory']; });
+        states.forEach(abbr => {
+          stateRep[abbr]  = r['Sales Rep'];
+          stateTerr[abbr] = r['Territory'];
+        });
       }
     });
 
-    return { stateRep, stateTerr, defaultRep, defaultTerr };
-  }
-
-  function buildCountyMap() {
+    // County map — AE only
     const splitStates = new Set();
     const countyMap   = {};
-    countyRows.forEach(r => {
-      const state  = (r['State']     || '').trim();
-      const county = (r['County']    || '').trim();
-      const rep    = (r['Sales Rep'] || '').trim();
-      const terr   = (r['Territory'] || '').trim();
-      if (state && county && rep) {
-        splitStates.add(state);
-        countyMap[state + '::' + county.toLowerCase()] = { rep, terr };
-      }
-    });
-    return { splitStates, countyMap };
+    if (group === 'AE') {
+      countyRows.forEach(r => {
+        const state  = (r['State']     || '').trim();
+        const county = (r['County']    || '').trim();
+        const rep    = (r['Sales Rep'] || '').trim();
+        const terr   = (r['Territory'] || '').trim();
+        if (state && county && rep) {
+          splitStates.add(state);
+          countyMap[state + '::' + county.toLowerCase()] = { rep, terr };
+        }
+      });
+    }
+
+    return { stateRep, stateTerr, defaultRep, defaultTerr, splitStates, countyMap };
   }
 
   function drawMap(group) {
     const svg = d3.select('#map');
     svg.selectAll('*').remove();
-    const g = svg.append('g');
-    const proj    = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
-    const geoPath = d3.geoPath(proj);
+    const g        = svg.append('g');
+    const proj     = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
+    const geoPath  = d3.geoPath(proj);
+    const { stateRep, stateTerr, defaultRep, defaultTerr, splitStates, countyMap } = parseData(group);
 
-    const { stateRep, stateTerr, defaultRep, defaultTerr } = buildStateMaps(group);
-    const { splitStates, countyMap } = group === 'AE' ? buildCountyMap() : { splitStates: new Set(), countyMap: {} };
-
-    function attachTooltip(sel, name, rep, terr) {
+    function tip(sel, name, rep, terr) {
       sel.style('cursor', 'pointer')
         .on('mouseenter', () => {
           ttName.textContent = name;
@@ -261,17 +242,17 @@
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
       if (!abbr) return;
-      // For AE view, skip split states (drawn at county level)
-      if (group === 'AE' && splitStates.has(abbr)) return;
-      const rep  = stateRep[abbr]  || (group === 'ISP' ? defaultRep  : '') || '';
-      const terr = stateTerr[abbr] || (group === 'ISP' ? defaultTerr : '') || '';
-      attachTooltip(
+      if (group === 'AE' && splitStates.has(abbr)) return; // drawn at county level
+      // Rep: explicit assignment, or fall back to default
+      const rep  = stateRep[abbr]  || defaultRep  || '';
+      const terr = stateTerr[abbr] || defaultTerr || '';
+      tip(
         g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group)).attr('stroke', '#fff').attr('stroke-width', 0.8),
         STATE_NAME[abbr] || f.properties.name, rep, terr
       );
     });
 
-    // AE only: draw counties for split states
+    // AE: draw counties for split states
     if (group === 'AE') {
       countiesGeo.forEach(f => {
         const fips5     = String(f.id).padStart(5, '0');
@@ -281,9 +262,10 @@
         const cName = (f.properties && f.properties.name) ? f.properties.name : '';
         if (!cName) return;
         const entry = countyMap[abbr + '::' + cName.toLowerCase()];
-        const rep   = entry ? entry.rep  : '';
-        const terr  = entry ? entry.terr : '';
-        attachTooltip(
+        // Fall back to Katie for unlisted counties in split states
+        const rep   = entry ? entry.rep  : (defaultRep  || '');
+        const terr  = entry ? entry.terr : (defaultTerr || '');
+        tip(
           g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, 'AE')).attr('stroke', '#fff').attr('stroke-width', 0.3),
           cName + ' County, ' + abbr, rep, terr
         );
@@ -297,19 +279,27 @@
       });
     }
 
-    // Build legend
+    // Build legend — reps in this view only
     const seenReps = new Map();
     terrRows.forEach(r => {
-      const g2 = (r['Group'] || '').trim().toUpperCase();
-      const rep  = r['Sales Rep'];
-      const terr = r['Territory'];
+      const grp  = (r['Group'] || '').trim().toUpperCase();
+      const rep  = (r['Sales Rep'] || '').trim();
+      const terr = (r['Territory'] || '').trim();
       if (!rep || seenReps.has(rep)) return;
-      if (g2 === group || (g2 === 'DEFAULT' && (group === 'AE' ? (r['State(s)'] || '').trim() !== '' : (r['State(s)'] || '').trim() === ''))) {
-        seenReps.set(rep, terr);
+      if (grp === group) { seenReps.set(rep, terr); return; }
+      if (grp === 'DEFAULT') {
+        const isISPDefault = (terr || '').toLowerCase().includes('isp') || (terr || '').toLowerCase().includes('manager');
+        if ((group === 'ISP' && isISPDefault) || (group === 'AE' && !isISPDefault)) {
+          seenReps.set(rep, terr);
+        }
       }
     });
     if (group === 'AE') {
-      countyRows.forEach(r => { if (r['Sales Rep'] && !seenReps.has(r['Sales Rep'])) seenReps.set(r['Sales Rep'], r['Territory']); });
+      countyRows.forEach(r => {
+        const rep  = (r['Sales Rep'] || '').trim();
+        const terr = (r['Territory'] || '').trim();
+        if (rep && !seenReps.has(rep)) seenReps.set(rep, terr);
+      });
     }
 
     legendEl.innerHTML = '';
@@ -322,7 +312,6 @@
   }
 
   window.switchView = function(group) {
-    currentView = group;
     document.getElementById('btn-ae').classList.toggle('active',  group === 'AE');
     document.getElementById('btn-isp').classList.toggle('active', group === 'ISP');
     subEl.textContent = group === 'AE' ? 'AE Coverage Q3-2026' : 'ISP Coverage Q3-2026';
@@ -332,19 +321,17 @@
   try {
     statusEl.textContent = 'Fetching territory data...';
 
-    const [terrRaw, countyRaw, topo] = await Promise.all([
-      fetch(TERR_URL).then(r => { if (!r.ok) throw new Error('Territories fetch failed: ' + r.status); return r.json(); }),
-      fetch(COUNTY_URL).then(r => { if (!r.ok) throw new Error('Counties fetch failed: ' + r.status); return r.json(); }),
+    const [terrRaw, countyRaw, usTopo] = await Promise.all([
+      fetch(TERR_URL).then(r => { if (!r.ok) throw new Error('Territories fetch: ' + r.status); return r.json(); }),
+      fetch(COUNTY_URL).then(r => { if (!r.ok) throw new Error('Counties fetch: ' + r.status); return r.json(); }),
       d3.json(TOPO_URL)
     ]);
 
-    terrRows    = toObjects(terrRaw);
-    countyRows  = toObjects(countyRaw);
-    usTopo      = topo;
-    statesGeo   = topojson.feature(usTopo, usTopo.objects.states).features;
-    countiesGeo = topojson.feature(usTopo, usTopo.objects.counties).features;
+    terrRows   = toObjects(terrRaw);
+    countyRows = toObjects(countyRaw);
+    statesGeo  = topojson.feature(usTopo, usTopo.objects.states).features;
+    countiesGeo= topojson.feature(usTopo, usTopo.objects.counties).features;
 
-    // Build FIPS → state abbr lookup (zero-pad to 2 digits)
     statesGeo.forEach(f => {
       const fips2 = String(f.id).padStart(2, '0');
       const abbr  = NAME_TO_ABBR[f.properties.name];
