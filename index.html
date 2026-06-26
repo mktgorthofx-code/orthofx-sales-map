@@ -171,46 +171,39 @@
   let terrRows = [], countyRows = [], statesGeo = [], countiesGeo = [], fipsToAbbr = {};
 
   function parseData(group) {
-    // DEFAULT reps — one for AE (Katie), one for ISP (Krista)
     let defaultRep = null, defaultTerr = null;
     const stateRep = {}, stateTerr = {};
 
     terrRows.forEach(r => {
-      const g = (r['Group'] || '').trim().toUpperCase();
+      const g      = (r['Group'] || '').trim().toUpperCase();
       const states = (r['State(s)'] || '').split(',').map(s => s.trim()).filter(Boolean);
-
+      const terr   = (r['Territory'] || '').toLowerCase();
       if (g === 'DEFAULT') {
-        // AE default (Katie) has no states listed; ISP default (Krista) has no states either
-        // Both are pure catch-alls — determine which group they belong to by Territory name
-        const terr = (r['Territory'] || '').toLowerCase();
         const isISPDefault = terr.includes('isp') || terr.includes('manager');
         if ((group === 'ISP' && isISPDefault) || (group === 'AE' && !isISPDefault)) {
           defaultRep  = r['Sales Rep'];
           defaultTerr = r['Territory'];
         }
       } else if (g === group) {
-        states.forEach(abbr => {
-          stateRep[abbr]  = r['Sales Rep'];
-          stateTerr[abbr] = r['Territory'];
-        });
+        states.forEach(abbr => { stateRep[abbr] = r['Sales Rep']; stateTerr[abbr] = r['Territory']; });
       }
     });
 
-    // County map — AE only
+    // Build county map filtered by group
     const splitStates = new Set();
     const countyMap   = {};
-    if (group === 'AE') {
-      countyRows.forEach(r => {
-        const state  = (r['State']     || '').trim();
-        const county = (r['County']    || '').trim();
-        const rep    = (r['Sales Rep'] || '').trim();
-        const terr   = (r['Territory'] || '').trim();
-        if (state && county && rep) {
-          splitStates.add(state);
-          countyMap[state + '::' + county.toLowerCase()] = { rep, terr };
-        }
-      });
-    }
+    countyRows.forEach(r => {
+      const rGroup = (r['Group'] || '').trim().toUpperCase();
+      if (rGroup !== group) return;
+      const state  = (r['State']     || '').trim();
+      const county = (r['County']    || '').trim();
+      const rep    = (r['Sales Rep'] || '').trim();
+      const terr   = (r['Territory'] || '').trim();
+      if (state && county && rep) {
+        splitStates.add(state);
+        countyMap[state + '::' + county.toLowerCase()] = { rep, terr };
+      }
+    });
 
     return { stateRep, stateTerr, defaultRep, defaultTerr, splitStates, countyMap };
   }
@@ -218,9 +211,9 @@
   function drawMap(group) {
     const svg = d3.select('#map');
     svg.selectAll('*').remove();
-    const g        = svg.append('g');
-    const proj     = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
-    const geoPath  = d3.geoPath(proj);
+    const g       = svg.append('g');
+    const proj    = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
+    const geoPath = d3.geoPath(proj);
     const { stateRep, stateTerr, defaultRep, defaultTerr, splitStates, countyMap } = parseData(group);
 
     function tip(sel, name, rep, terr) {
@@ -238,12 +231,10 @@
         .on('mouseleave', () => { ttEl.style.display = 'none'; });
     }
 
-    // Draw whole states
+    // Draw whole states (skip split states — drawn at county level)
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
-      if (!abbr) return;
-      if (group === 'AE' && splitStates.has(abbr)) return; // drawn at county level
-      // Rep: explicit assignment, or fall back to default
+      if (!abbr || splitStates.has(abbr)) return;
       const rep  = stateRep[abbr]  || defaultRep  || '';
       const terr = stateTerr[abbr] || defaultTerr || '';
       tip(
@@ -252,34 +243,31 @@
       );
     });
 
-    // AE: draw counties for split states
-    if (group === 'AE') {
-      countiesGeo.forEach(f => {
-        const fips5     = String(f.id).padStart(5, '0');
-        const stateFips = fips5.slice(0, 2);
-        const abbr      = fipsToAbbr[stateFips];
-        if (!abbr || !splitStates.has(abbr)) return;
-        const cName = (f.properties && f.properties.name) ? f.properties.name : '';
-        if (!cName) return;
-        const entry = countyMap[abbr + '::' + cName.toLowerCase()];
-        // Fall back to Katie for unlisted counties in split states
-        const rep   = entry ? entry.rep  : (defaultRep  || '');
-        const terr  = entry ? entry.terr : (defaultTerr || '');
-        tip(
-          g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, 'AE')).attr('stroke', '#fff').attr('stroke-width', 0.3),
-          cName + ' County, ' + abbr, rep, terr
-        );
-      });
+    // Draw counties for split states
+    countiesGeo.forEach(f => {
+      const fips5     = String(f.id).padStart(5, '0');
+      const stateFips = fips5.slice(0, 2);
+      const abbr      = fipsToAbbr[stateFips];
+      if (!abbr || !splitStates.has(abbr)) return;
+      const cName = (f.properties && f.properties.name) ? f.properties.name : '';
+      if (!cName) return;
+      const entry = countyMap[abbr + '::' + cName.toLowerCase()];
+      const rep   = entry ? entry.rep  : (defaultRep  || '');
+      const terr  = entry ? entry.terr : (defaultTerr || '');
+      tip(
+        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group)).attr('stroke', '#fff').attr('stroke-width', 0.3),
+        cName + ' County, ' + abbr, rep, terr
+      );
+    });
 
-      // State border overlay for split states
-      statesGeo.forEach(f => {
-        const abbr = NAME_TO_ABBR[f.properties.name];
-        if (!abbr || !splitStates.has(abbr)) return;
-        g.append('path').attr('d', geoPath(f)).attr('fill', 'none').attr('stroke', '#525252').attr('stroke-width', 0.9).attr('pointer-events', 'none');
-      });
-    }
+    // State border overlay for split states
+    statesGeo.forEach(f => {
+      const abbr = NAME_TO_ABBR[f.properties.name];
+      if (!abbr || !splitStates.has(abbr)) return;
+      g.append('path').attr('d', geoPath(f)).attr('fill', 'none').attr('stroke', '#525252').attr('stroke-width', 0.9).attr('pointer-events', 'none');
+    });
 
-    // Build legend — reps in this view only
+    // Build legend
     const seenReps = new Map();
     terrRows.forEach(r => {
       const grp  = (r['Group'] || '').trim().toUpperCase();
@@ -288,19 +276,19 @@
       if (!rep || seenReps.has(rep)) return;
       if (grp === group) { seenReps.set(rep, terr); return; }
       if (grp === 'DEFAULT') {
-        const isISPDefault = (terr || '').toLowerCase().includes('isp') || (terr || '').toLowerCase().includes('manager');
+        const isISPDefault = terr.toLowerCase().includes('isp') || terr.toLowerCase().includes('manager');
         if ((group === 'ISP' && isISPDefault) || (group === 'AE' && !isISPDefault)) {
           seenReps.set(rep, terr);
         }
       }
     });
-    if (group === 'AE') {
-      countyRows.forEach(r => {
-        const rep  = (r['Sales Rep'] || '').trim();
-        const terr = (r['Territory'] || '').trim();
-        if (rep && !seenReps.has(rep)) seenReps.set(rep, terr);
-      });
-    }
+    countyRows.forEach(r => {
+      const rGroup = (r['Group'] || '').trim().toUpperCase();
+      if (rGroup !== group) return;
+      const rep  = (r['Sales Rep'] || '').trim();
+      const terr = (r['Territory'] || '').trim();
+      if (rep && !seenReps.has(rep)) seenReps.set(rep, terr);
+    });
 
     legendEl.innerHTML = '';
     seenReps.forEach((terr, rep) => {
@@ -327,10 +315,10 @@
       d3.json(TOPO_URL)
     ]);
 
-    terrRows   = toObjects(terrRaw);
-    countyRows = toObjects(countyRaw);
-    statesGeo  = topojson.feature(usTopo, usTopo.objects.states).features;
-    countiesGeo= topojson.feature(usTopo, usTopo.objects.counties).features;
+    terrRows    = toObjects(terrRaw);
+    countyRows  = toObjects(countyRaw);
+    statesGeo   = topojson.feature(usTopo, usTopo.objects.states).features;
+    countiesGeo = topojson.feature(usTopo, usTopo.objects.counties).features;
 
     statesGeo.forEach(f => {
       const fips2 = String(f.id).padStart(2, '0');
