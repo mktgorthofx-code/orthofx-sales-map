@@ -201,7 +201,12 @@
       const terr   = (r['Territory'] || '').trim();
       if (state && county && rep) {
         splitStates.add(state);
-        countyMap[state + '::' + county.toLowerCase()] = { rep, terr };
+        const countyClean = county.toLowerCase().trim();
+        countyMap[state + '::' + countyClean] = { rep, terr };
+        // Also index by first 6 chars to handle minor typos (e.g. "Trinit" vs "Trinity")
+        if (countyClean.length >= 5) {
+          countyMap[state + '::~' + countyClean.slice(0, 6)] = { rep, terr };
+        }
       }
     });
 
@@ -251,7 +256,9 @@
       if (!abbr || !splitStates.has(abbr)) return;
       const cName = (f.properties && f.properties.name) ? f.properties.name : '';
       if (!cName) return;
-      const entry = countyMap[abbr + '::' + cName.toLowerCase()];
+      const cNameLower = cName.toLowerCase();
+      const entry = countyMap[abbr + '::' + cNameLower] ||
+                    countyMap[abbr + '::~' + cNameLower.slice(0, 6)];
       const rep   = entry ? entry.rep  : (defaultRep  || '');
       const terr  = entry ? entry.terr : (defaultTerr || '');
       tip(
