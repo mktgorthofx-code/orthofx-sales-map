@@ -142,6 +142,7 @@
     'Emily Gonzalez':    '#fd8d3c',
     'Mary Beth White':   '#9e9ac8',
     'Elena Mahford':     '#e31a1c',
+    'Fallan Wilckens':   '#6a3d9a',
     'Krista Chapman':    '#bdbdbd',
   };
 
@@ -228,7 +229,10 @@
       if (state && county && rep) {
         splitStates.add(state);
         const isPrimary = (r['Primary'] || '').trim().toUpperCase() === 'Y';
-        countyMap[state + '::' + county.toLowerCase().trim()] = { rep, terr, isPrimary };
+        const cKey = county.toLowerCase().trim();
+        const entry = { rep, terr, isPrimary };
+        countyMap[state + '::' + cKey] = entry;
+        countyMap[state + '::' + cKey.replace(/\s+/g, '')] = entry;
       }
     });
 
@@ -258,10 +262,10 @@
         .on('mouseleave', () => { ttEl.style.display = 'none'; });
     }
 
-    // Draw whole states (skip split states — drawn at county level)
+    // Step 1: Draw ALL states in secondary color as base layer
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
-      if (!abbr || splitStates.has(abbr)) return;
+      if (!abbr) return;
       const rep  = stateRep[abbr]  || defaultRep  || '';
       const terr = stateTerr[abbr] || defaultTerr || '';
       tip(
@@ -270,25 +274,28 @@
       );
     });
 
-    // Draw counties for split states
+    // Step 2: Overlay county-level colors — Primary Y gets darker color
     countiesGeo.forEach(f => {
       const fips5     = String(f.id).padStart(5, '0');
       const stateFips = fips5.slice(0, 2);
       const abbr      = fipsToAbbr[stateFips];
-      if (!abbr || !splitStates.has(abbr)) return;
+      if (!abbr) return;
       const cName = (f.properties && f.properties.name) ? f.properties.name : '';
       if (!cName) return;
-      const entry = countyMap[abbr + '::' + cName.toLowerCase()];
-      const rep       = entry ? entry.rep       : (defaultRep  || '');
-      const terr      = entry ? entry.terr      : (defaultTerr || '');
-      const isPrimary = entry ? entry.isPrimary : false;
+      const cLower = cName.toLowerCase();
+      const entry = countyMap[abbr + '::' + cLower] ||
+                    countyMap[abbr + '::' + cLower.replace(/\s+/g, '')];
+      if (!entry) return;
+      const rep       = entry.rep;
+      const terr      = entry.terr;
+      const isPrimary = entry.isPrimary;
       tip(
         g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group, isPrimary)).attr('stroke', '#fff').attr('stroke-width', 0.3),
         cName + ' County, ' + abbr, rep, terr
       );
     });
 
-    // State border overlay for split states
+    // Step 3: State border overlay for split states
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
       if (!abbr || !splitStates.has(abbr)) return;
