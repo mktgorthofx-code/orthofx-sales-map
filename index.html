@@ -8,59 +8,36 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #fffffa;
-    color: #2C2C2A;
-    padding: 20px;
+    background: #fffffa; color: #2C2C2A; padding: 20px;
   }
   h1 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
   .subtitle { font-size: 12px; color: #888780; margin-bottom: 14px; }
   #toggle-wrap {
-    display: flex;
-    margin-bottom: 16px;
-    border: 1px solid #D3D1C7;
-    border-radius: 8px;
-    overflow: hidden;
-    width: fit-content;
+    display: flex; margin-bottom: 16px;
+    border: 1px solid #D3D1C7; border-radius: 8px; overflow: hidden; width: fit-content;
   }
   .toggle-btn {
-    padding: 7px 22px;
-    font-size: 13px;
-    font-weight: 500;
-    background: #ffffff;
-    color: #5F5E5A;
-    border: none;
-    cursor: pointer;
+    padding: 7px 22px; font-size: 13px; font-weight: 500;
+    background: #fff; color: #5F5E5A; border: none; cursor: pointer;
     transition: background 0.15s, color 0.15s;
   }
   .toggle-btn:first-child { border-right: 1px solid #D3D1C7; }
-  .toggle-btn.active { background: #1F4E79; color: #ffffff; }
+  .toggle-btn.active { background: #1F4E79; color: #fff; }
   .toggle-btn:hover:not(.active) { background: #F0EFE9; }
   #map-wrap { width: 100%; max-width: 1100px; position: relative; }
   #map { width: 100%; display: block; }
   #tooltip {
-    position: fixed;
-    display: none;
-    background: #fff;
-    border: 1px solid #D3D1C7;
-    border-radius: 7px;
-    padding: 7px 11px;
-    font-size: 13px;
-    pointer-events: none;
-    z-index: 100;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.10);
-    max-width: 220px;
+    position: fixed; display: none; background: #fff;
+    border: 1px solid #D3D1C7; border-radius: 7px; padding: 7px 11px;
+    font-size: 13px; pointer-events: none; z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.10); max-width: 220px;
   }
   #tooltip strong { display: block; font-size: 13px; margin-bottom: 2px; }
   .tt-rep  { font-size: 12px; color: #3C3C3A; }
   .tt-terr { font-size: 11px; color: #888780; }
   #legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 18px;
-    margin-top: 14px;
-    font-size: 12.5px;
-    color: #3C3C3A;
-    max-width: 1100px;
+    display: flex; flex-wrap: wrap; gap: 8px 18px;
+    margin-top: 14px; font-size: 12.5px; color: #3C3C3A; max-width: 1100px;
   }
   .legend-item { display: flex; align-items: center; gap: 6px; }
   .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.12); }
@@ -100,8 +77,8 @@
   const COUNTY_URL = RELAY + '?sheet=Split%20State%20Counties';
   const TOPO_URL   = 'https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json';
 
-  // Secondary (lighter) colors — default for all counties
-  const AE_COLORS = {
+  // AE Secondary (lighter) colors — default for all counties
+  const AE_SEC = {
     'Lisa Medeiros':   '#bdbdbd',
     'Tim Franklin':    '#b2df8a',
     'Patrick Welch':   '#80b1d3',
@@ -118,8 +95,8 @@
     'Katie Starkey':   '#d9b400',
   };
 
-  // Primary (darker) colors — focal counties (Primary = Y)
-  const AE_PRIMARY_COLORS = {
+  // AE Primary (darker) colors — focal counties (Primary = Y)
+  const AE_PRI = {
     'Lisa Medeiros':   '#969696',
     'Tim Franklin':    '#33a02c',
     'Patrick Welch':   '#2166ac',
@@ -136,7 +113,8 @@
     'Katie Starkey':   '#d9b400',
   };
 
-  const ISP_COLORS = {
+  // ISP colors (single palette, no primary/secondary)
+  const ISP_COL = {
     'Nicole Richardson': '#4393c3',
     'Rita Demerjian':    '#74c476',
     'Emily Gonzalez':    '#fd8d3c',
@@ -148,234 +126,206 @@
 
   const colorCache = {};
   function colorFor(rep, group, isPrimary) {
-    if (!rep || typeof rep !== 'string' || !rep.trim()) return '#d1dbdd';
-    const key = group + '::' + rep + '::' + (isPrimary ? '1' : '0');
+    if (!rep || !rep.trim()) return '#d1dbdd';
+    const key = group + rep + (isPrimary ? '1' : '0');
     if (colorCache[key]) return colorCache[key];
-    let palette;
-    if (group === 'ISP') {
-      palette = ISP_COLORS;
-    } else if (isPrimary) {
-      palette = AE_PRIMARY_COLORS;
-    } else {
-      palette = AE_COLORS;
+    let palette = group === 'ISP' ? ISP_COL : (isPrimary ? AE_PRI : AE_SEC);
+    let color = palette[rep];
+    if (!color) {
+      const lo = rep.toLowerCase();
+      const match = Object.keys(palette).find(k => lo.includes((k.split(' ')[1]||'').toLowerCase()));
+      color = match ? palette[match] : '#d1dbdd';
     }
-    if (palette[rep]) { colorCache[key] = palette[rep]; return palette[rep]; }
-    const repLower = rep.toLowerCase();
-    const match = Object.keys(palette).find(k => {
-      const last = (k.split(' ')[1] || '').toLowerCase();
-      return last && repLower.includes(last);
-    });
-    const color = match ? palette[match] : '#d1dbdd';
     colorCache[key] = color;
     return color;
   }
 
   function toObjects(rows) {
-    if (!Array.isArray(rows) || rows.length < 2) return [];
-    const header = rows[0].map(h => String(h || '').trim());
-    return rows.slice(1)
-      .filter(r => Array.isArray(r) && r.some(c => String(c || '').trim()))
-      .map(r => {
-        const obj = {};
-        header.forEach((h, i) => { obj[h] = String(r[i] !== undefined && r[i] !== null ? r[i] : '').trim(); });
-        return obj;
-      });
+    if (!rows || rows.length < 2) return [];
+    const hdr = rows[0].map(h => String(h||'').trim());
+    return rows.slice(1).filter(r => r.some(c => String(c||'').trim())).map(r => {
+      const o = {};
+      hdr.forEach((h,i) => { o[h] = String(r[i]!=null ? r[i] : '').trim(); });
+      return o;
+    });
   }
 
   const STATE_NAME = {AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'District of Columbia'};
-  const NAME_TO_ABBR = {};
-  Object.entries(STATE_NAME).forEach(([a, n]) => { NAME_TO_ABBR[n] = a; });
+  const NAME_TO_ABBR = Object.fromEntries(Object.entries(STATE_NAME).map(([a,n])=>[n,a]));
 
-  const errorEl  = document.getElementById('error');
-  const statusEl = document.getElementById('status');
-  const subEl    = document.getElementById('subtitle');
-  const legendEl = document.getElementById('legend');
-  const ttEl     = document.getElementById('tooltip');
-  const ttName   = document.getElementById('tt-name');
-  const ttRep    = document.getElementById('tt-rep');
-  const ttTerr   = document.getElementById('tt-terr');
+  const errEl  = document.getElementById('error');
+  const statEl = document.getElementById('status');
+  const subEl  = document.getElementById('subtitle');
+  const legEl  = document.getElementById('legend');
+  const ttEl   = document.getElementById('tooltip');
+  const ttName = document.getElementById('tt-name');
+  const ttRep  = document.getElementById('tt-rep');
+  const ttTerr = document.getElementById('tt-terr');
 
-  let terrRows = [], countyRows = [], statesGeo = [], countiesGeo = [], fipsToAbbr = {};
+  let terrRows=[], countyRows=[], statesGeo=[], countiesGeo=[], fipsToAbbr={};
 
-  function parseData(group) {
-    let defaultRep = null, defaultTerr = null;
-    const stateRep = {}, stateTerr = {};
+  function buildData(group) {
+    // --- Territories tab: whole-state assignments for this group ---
+    const stateRep={}, stateTerr={};
+    let defRep=null, defTerr=null;
 
     terrRows.forEach(r => {
-      const g      = (r['Group'] || '').trim().toUpperCase();
-      const states = (r['State(s)'] || '').split(',').map(s => s.trim()).filter(Boolean);
-      const terr   = (r['Territory'] || '').toLowerCase();
+      const g = (r['Group']||'').trim().toUpperCase();
+      const states = (r['State(s)']||'').split(',').map(s=>s.trim()).filter(Boolean);
+      const terr = (r['Territory']||'').toLowerCase();
       if (g === 'DEFAULT') {
-        const isISPDefault = terr.includes('isp') || terr.includes('manager');
-        if ((group === 'ISP' && isISPDefault) || (group === 'AE' && !isISPDefault)) {
-          defaultRep  = r['Sales Rep'];
-          defaultTerr = r['Territory'];
+        const isISP = terr.includes('isp') || terr.includes('manager');
+        if ((group==='ISP' && isISP) || (group==='AE' && !isISP)) {
+          defRep  = r['Sales Rep'];
+          defTerr = r['Territory'];
         }
       } else if (g === group) {
-        states.forEach(abbr => { stateRep[abbr] = r['Sales Rep']; stateTerr[abbr] = r['Territory']; });
+        states.forEach(abbr => { stateRep[abbr]=r['Sales Rep']; stateTerr[abbr]=r['Territory']; });
       }
     });
 
-    // Build county map filtered by group
-    const splitStates = new Set();
-    const countyMap   = {};
-    const stateRepCount = {};
+    // --- County rows: filter to this group only ---
+    // splitStates = states where THIS group has 2+ different reps in county rows
+    const stateRepsInCounties = {}; // state -> Set of reps (for this group)
+    const countyMap = {};
+
     countyRows.forEach(r => {
-      const rGroup = (r['Group'] || '').trim().toUpperCase();
-      if (rGroup !== group) return;
-      const state  = (r['State']     || '').trim();
-      const county = (r['County']    || '').trim();
-      const rep    = (r['Sales Rep'] || '').trim();
-      const terr   = (r['Territory'] || '').trim();
-      if (state && county && rep) {
-        const isPrimary = (r['Primary'] || '').trim().toUpperCase() === 'Y';
-        const cKey = county.toLowerCase().trim();
-        const entry = { rep, terr, isPrimary };
-        countyMap[state + '::' + cKey] = entry;
-        countyMap[state + '::' + cKey.replace(/\s+/g, '')] = entry;
-        // Track reps per state to determine true splits
-        if (!stateRepCount[state]) stateRepCount[state] = new Set();
-        stateRepCount[state].add(rep);
-      }
+      const rg = (r['Group']||'').trim().toUpperCase();
+      if (rg !== group) return; // CRITICAL: only process rows for current group
+      const state  = (r['State']||'').trim();
+      const county = (r['County']||'').trim();
+      const rep    = (r['Sales Rep']||'').trim();
+      const terr   = (r['Territory']||'').trim();
+      const isPri  = (r['Primary']||'').trim().toUpperCase() === 'Y';
+      if (!state || !county || !rep) return;
+
+      if (!stateRepsInCounties[state]) stateRepsInCounties[state] = new Set();
+      stateRepsInCounties[state].add(rep);
+
+      const clo = county.toLowerCase();
+      const entry = { rep, terr, isPri };
+      countyMap[state+'::'+clo] = entry;
+      countyMap[state+'::'+clo.replace(/\s+/g,'')] = entry;
     });
 
-    // Only treat as split state if multiple reps cover it
-    // (Single-rep states with Primary focal rows use base layer + county overlay)
-    Object.entries(stateRepCount).forEach(([state, reps]) => {
-      if (reps.size > 1) splitStates.add(state);
-    });
-    return { stateRep, stateTerr, defaultRep, defaultTerr, splitStates, countyMap };
+    // Only mark as split if 2+ different reps for this group
+    const splitStates = new Set(
+      Object.entries(stateRepsInCounties)
+        .filter(([,reps]) => reps.size > 1)
+        .map(([s]) => s)
+    );
+
+    return { stateRep, stateTerr, defRep, defTerr, splitStates, countyMap };
   }
 
   function drawMap(group) {
-    const svg = d3.select('#map');
-    svg.selectAll('*').remove();
-    const g       = svg.append('g');
-    const proj    = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
+    d3.select('#map').selectAll('*').remove();
+    const g       = d3.select('#map').append('g');
+    const proj    = d3.geoAlbersUsa().scale(1300).translate([487.5,305]);
     const geoPath = d3.geoPath(proj);
-    const { stateRep, stateTerr, defaultRep, defaultTerr, splitStates, countyMap } = parseData(group);
+    const { stateRep, stateTerr, defRep, defTerr, splitStates, countyMap } = buildData(group);
 
     function tip(sel, name, rep, terr) {
-      sel.style('cursor', 'pointer')
-        .on('mouseenter', () => {
-          ttName.textContent = name;
-          ttRep.textContent  = rep  || 'Unassigned';
-          ttTerr.textContent = terr || '';
-          ttEl.style.display = 'block';
-        })
-        .on('mousemove', ev => {
-          ttEl.style.left = (ev.clientX + 14) + 'px';
-          ttEl.style.top  = (ev.clientY + 14) + 'px';
-        })
-        .on('mouseleave', () => { ttEl.style.display = 'none'; });
+      sel.style('cursor','pointer')
+        .on('mouseenter', () => { ttName.textContent=name; ttRep.textContent=rep||'Unassigned'; ttTerr.textContent=terr||''; ttEl.style.display='block'; })
+        .on('mousemove',  ev => { ttEl.style.left=(ev.clientX+14)+'px'; ttEl.style.top=(ev.clientY+14)+'px'; })
+        .on('mouseleave', () => { ttEl.style.display='none'; });
     }
 
-    // Step 1: Draw ALL states in secondary color as base layer
+    // Step 1: Draw ALL states in secondary/base color
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
       if (!abbr) return;
-      const rep  = stateRep[abbr]  || defaultRep  || '';
-      const terr = stateTerr[abbr] || defaultTerr || '';
+      const rep  = stateRep[abbr]  || defRep  || '';
+      const terr = stateTerr[abbr] || defTerr || '';
       tip(
-        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group, false)).attr('stroke', '#fff').attr('stroke-width', 0.8),
-        STATE_NAME[abbr] || f.properties.name, rep, terr
+        g.append('path').attr('d',geoPath(f)).attr('fill',colorFor(rep,group,false)).attr('stroke','#fff').attr('stroke-width',0.8),
+        STATE_NAME[abbr]||f.properties.name, rep, terr
       );
     });
 
-    // Step 2: Overlay county-level colors — Primary Y gets darker color
+    // Step 2: Overlay county-level entries from countyMap
+    // For split states: draws both N (secondary) and Y (primary) counties
+    // For non-split states with county rows: only Y (primary) counties show darker
     countiesGeo.forEach(f => {
-      const fips5     = String(f.id).padStart(5, '0');
-      const stateFips = fips5.slice(0, 2);
-      const abbr      = fipsToAbbr[stateFips];
+      const fips5 = String(f.id).padStart(5,'0');
+      const abbr  = fipsToAbbr[fips5.slice(0,2)];
       if (!abbr) return;
-      const cName = (f.properties && f.properties.name) ? f.properties.name : '';
+      const cName = f.properties && f.properties.name ? f.properties.name : '';
       if (!cName) return;
-      const cLower = cName.toLowerCase();
-      const entry = countyMap[abbr + '::' + cLower] ||
-                    countyMap[abbr + '::' + cLower.replace(/\s+/g, '')];
-      if (!entry) return;
-      const rep       = entry.rep;
-      const terr      = entry.terr;
-      const isPrimary = entry.isPrimary;
+      const clo   = cName.toLowerCase();
+      const entry = countyMap[abbr+'::'+clo] || countyMap[abbr+'::'+clo.replace(/\s+/g,'')];
+      if (!entry) return; // no entry = state base color handles it
       tip(
-        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group, isPrimary)).attr('stroke', '#fff').attr('stroke-width', 0.3),
-        cName + ' County, ' + abbr, rep, terr
+        g.append('path').attr('d',geoPath(f)).attr('fill',colorFor(entry.rep,group,entry.isPri)).attr('stroke','#fff').attr('stroke-width',0.3),
+        cName+' County, '+abbr, entry.rep, entry.terr
       );
     });
 
-    // Step 3: State border overlay for split states
+    // Step 3: State border overlay for true split states
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
       if (!abbr || !splitStates.has(abbr)) return;
-      g.append('path').attr('d', geoPath(f)).attr('fill', 'none').attr('stroke', '#525252').attr('stroke-width', 0.9).attr('pointer-events', 'none');
+      g.append('path').attr('d',geoPath(f)).attr('fill','none').attr('stroke','#525252').attr('stroke-width',0.9).attr('pointer-events','none');
     });
 
-    // Build legend
+    // Legend
     const seenReps = new Map();
     terrRows.forEach(r => {
-      const grp  = (r['Group'] || '').trim().toUpperCase();
-      const rep  = (r['Sales Rep'] || '').trim();
-      const terr = (r['Territory'] || '').trim();
+      const grp = (r['Group']||'').trim().toUpperCase();
+      const rep = r['Sales Rep'], terr = r['Territory'];
       if (!rep || seenReps.has(rep)) return;
-      if (grp === group) { seenReps.set(rep, terr); return; }
-      if (grp === 'DEFAULT') {
-        const isISPDefault = terr.toLowerCase().includes('isp') || terr.toLowerCase().includes('manager');
-        if ((group === 'ISP' && isISPDefault) || (group === 'AE' && !isISPDefault)) {
-          seenReps.set(rep, terr);
-        }
-      }
+      const t = (terr||'').toLowerCase();
+      const isISPDef = t.includes('isp')||t.includes('manager');
+      if (grp === group) { seenReps.set(rep,terr); return; }
+      if (grp === 'DEFAULT' && ((group==='ISP'&&isISPDef)||(group==='AE'&&!isISPDef))) seenReps.set(rep,terr);
     });
     countyRows.forEach(r => {
-      const rGroup = (r['Group'] || '').trim().toUpperCase();
-      if (rGroup !== group) return;
-      const rep  = (r['Sales Rep'] || '').trim();
-      const terr = (r['Territory'] || '').trim();
-      if (rep && !seenReps.has(rep)) seenReps.set(rep, terr);
+      if ((r['Group']||'').trim().toUpperCase()!==group) return;
+      if (r['Sales Rep'] && !seenReps.has(r['Sales Rep'])) seenReps.set(r['Sales Rep'],r['Territory']);
     });
 
-    legendEl.innerHTML = '';
-    seenReps.forEach((terr, rep) => {
+    legEl.innerHTML = '';
+    seenReps.forEach((terr,rep) => {
       const item = document.createElement('span');
       item.className = 'legend-item';
-      item.innerHTML = `<span class="legend-swatch" style="background:${colorFor(rep, group, false)}"></span>${rep} <span style="color:#AAA89E;font-size:11px;margin-left:2px">(${terr})</span>`;
-      legendEl.appendChild(item);
+      item.innerHTML = `<span class="legend-swatch" style="background:${colorFor(rep,group,false)}"></span>${rep} <span style="color:#AAA89E;font-size:11px;margin-left:2px">(${terr})</span>`;
+      legEl.appendChild(item);
     });
   }
 
   window.switchView = function(group) {
-    document.getElementById('btn-ae').classList.toggle('active',  group === 'AE');
-    document.getElementById('btn-isp').classList.toggle('active', group === 'ISP');
-    subEl.textContent = group === 'AE' ? 'AE Coverage Q3-2026' : 'ISP Coverage Q3-2026';
+    document.getElementById('btn-ae').classList.toggle('active', group==='AE');
+    document.getElementById('btn-isp').classList.toggle('active', group==='ISP');
+    subEl.textContent = group==='AE' ? 'AE Coverage Q3-2026' : 'ISP Coverage Q3-2026';
     drawMap(group);
   };
 
   try {
-    statusEl.textContent = 'Fetching territory data...';
-
-    const [terrRaw, countyRaw, usTopo] = await Promise.all([
-      fetch(TERR_URL).then(r => { if (!r.ok) throw new Error('Territories fetch: ' + r.status); return r.json(); }),
-      fetch(COUNTY_URL).then(r => { if (!r.ok) throw new Error('Counties fetch: ' + r.status); return r.json(); }),
+    statEl.textContent = 'Fetching territory data...';
+    const [tr, cr, usTopo] = await Promise.all([
+      fetch(TERR_URL).then(r=>{ if(!r.ok) throw new Error('Territories: '+r.status); return r.json(); }),
+      fetch(COUNTY_URL).then(r=>{ if(!r.ok) throw new Error('Counties: '+r.status); return r.json(); }),
       d3.json(TOPO_URL)
     ]);
 
-    terrRows    = toObjects(terrRaw);
-    countyRows  = toObjects(countyRaw);
-    statesGeo   = topojson.feature(usTopo, usTopo.objects.states).features;
-    countiesGeo = topojson.feature(usTopo, usTopo.objects.counties).features;
+    terrRows   = toObjects(tr);
+    countyRows = toObjects(cr);
+    statesGeo  = topojson.feature(usTopo, usTopo.objects.states).features;
+    countiesGeo= topojson.feature(usTopo, usTopo.objects.counties).features;
 
     statesGeo.forEach(f => {
-      const fips2 = String(f.id).padStart(2, '0');
-      const abbr  = NAME_TO_ABBR[f.properties.name];
-      if (abbr) fipsToAbbr[fips2] = abbr;
+      const abbr = NAME_TO_ABBR[f.properties.name];
+      if (abbr) fipsToAbbr[String(f.id).padStart(2,'0')] = abbr;
     });
 
     drawMap('AE');
-    statusEl.textContent = 'Live data · Last loaded ' + new Date().toLocaleString();
+    statEl.textContent = 'Live data · Last loaded ' + new Date().toLocaleString();
 
-  } catch (err) {
-    errorEl.style.display = 'block';
-    errorEl.textContent   = 'Error loading map: ' + err.message;
-    statusEl.textContent  = '';
+  } catch(err) {
+    errEl.style.display='block';
+    errEl.textContent='Error loading map: '+err.message;
+    statEl.textContent='';
     console.error(err);
   }
 
