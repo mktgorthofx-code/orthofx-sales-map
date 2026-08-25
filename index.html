@@ -47,7 +47,7 @@
 </head>
 <body>
 
-<h1>OrthoFX — Sales Territory Coverage</h1>
+<h1>OrthoFX — Sales Territory Coverage <span style="font-size:11px;color:#AAA89E;font-weight:normal">[v12]</span></h1>
 <p class="subtitle" id="subtitle">Loading...</p>
 
 <div id="toggle-wrap">
@@ -215,6 +215,7 @@
         .map(([s]) => s)
     );
 
+    console.log('[v12] group:', group, '| splitStates:', Array.from(splitStates).sort().join(',') || 'none', '| countyMap keys sample:', Object.keys(countyMap).slice(0,3));
     return { stateRep, stateTerr, defRep, defTerr, splitStates, countyMap };
   }
 
