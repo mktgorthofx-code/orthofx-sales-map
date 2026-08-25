@@ -265,11 +265,11 @@
       );
     });
 
-    // Step 3: State border overlay for true split states
+    // Step 3: State border overlay for ALL states — 2px solid black
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
-      if (!abbr || !splitStates.has(abbr)) return;
-      g.append('path').attr('d',geoPath(f)).attr('fill','none').attr('stroke','#525252').attr('stroke-width',0.9).attr('pointer-events','none');
+      if (!abbr) return;
+      g.append('path').attr('d',geoPath(f)).attr('fill','none').attr('stroke','#000000').attr('stroke-width',2).attr('pointer-events','none');
     });
 
     // Legend
