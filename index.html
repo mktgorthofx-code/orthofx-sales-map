@@ -219,6 +219,7 @@
     // Build county map filtered by group
     const splitStates = new Set();
     const countyMap   = {};
+    const stateRepCount = {};
     countyRows.forEach(r => {
       const rGroup = (r['Group'] || '').trim().toUpperCase();
       if (rGroup !== group) return;
@@ -227,15 +228,22 @@
       const rep    = (r['Sales Rep'] || '').trim();
       const terr   = (r['Territory'] || '').trim();
       if (state && county && rep) {
-        splitStates.add(state);
         const isPrimary = (r['Primary'] || '').trim().toUpperCase() === 'Y';
         const cKey = county.toLowerCase().trim();
         const entry = { rep, terr, isPrimary };
         countyMap[state + '::' + cKey] = entry;
         countyMap[state + '::' + cKey.replace(/\s+/g, '')] = entry;
+        // Track reps per state to determine true splits
+        if (!stateRepCount[state]) stateRepCount[state] = new Set();
+        stateRepCount[state].add(rep);
       }
     });
 
+    // Only treat as split state if multiple reps cover it
+    // (Single-rep states with Primary focal rows use base layer + county overlay)
+    Object.entries(stateRepCount).forEach(([state, reps]) => {
+      if (reps.size > 1) splitStates.add(state);
+    });
     return { stateRep, stateTerr, defaultRep, defaultTerr, splitStates, countyMap };
   }
 
