@@ -100,22 +100,40 @@
   const COUNTY_URL = RELAY + '?sheet=Split%20State%20Counties';
   const TOPO_URL   = 'https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json';
 
+  // Secondary (lighter) colors — default for all counties
   const AE_COLORS = {
-    'Lisa Medeiros':   '#969696',
+    'Lisa Medeiros':   '#bdbdbd',
     'Tim Franklin':    '#b2df8a',
     'Patrick Welch':   '#80b1d3',
-    'Celia Farbo':     '#fdbf6f',
+    'Celia Farbo':     '#feb24c',
     'Jessica Baker':   '#fddaec',
-    'Graham Leonard':  '#f781bf',
-    'Justin Remkus':   '#33a02c',
-    'Jared Levy':      '#377eb8',
-    'Becky Evans':     '#ff7f00',
+    'Graham Leonard':  '#fbb4ae',
+    'Justin Remkus':   '#e88471',
+    'Jared Levy':      '#abd9e9',
+    'Becky Stevens':   '#ccebc5',
+    'Danny Poelman':   '#ffffbf',
+    'Sabrina Orlando': '#fff7ec',
+    'Shema Muhiga':    '#decbe4',
+    'Khaled Edwan':    '#ccece6',
+    'Katie Starkey':   '#d9b400',
+  };
+
+  // Primary (darker) colors — focal counties (Primary = Y)
+  const AE_PRIMARY_COLORS = {
+    'Lisa Medeiros':   '#969696',
+    'Tim Franklin':    '#33a02c',
+    'Patrick Welch':   '#2166ac',
+    'Celia Farbo':     '#ff7f00',
+    'Jessica Baker':   '#f781bf',
+    'Graham Leonard':  '#cf597e',
+    'Justin Remkus':   '#cc503e',
+    'Jared Levy':      '#225ea8',
+    'Becky Stevens':   '#238b45',
     'Danny Poelman':   '#ffff33',
     'Sabrina Orlando': '#fed976',
-    'Shema Muhiga':    '#decbe4',
+    'Shema Muhiga':    '#986ba1',
     'Khaled Edwan':    '#7bccc4',
     'Katie Starkey':   '#d9b400',
-    'Sydney Reist':    '#a6cee3',
   };
 
   const ISP_COLORS = {
@@ -128,11 +146,18 @@
   };
 
   const colorCache = {};
-  function colorFor(rep, group) {
+  function colorFor(rep, group, isPrimary) {
     if (!rep || typeof rep !== 'string' || !rep.trim()) return '#d1dbdd';
-    const key = group + '::' + rep;
+    const key = group + '::' + rep + '::' + (isPrimary ? '1' : '0');
     if (colorCache[key]) return colorCache[key];
-    const palette = group === 'ISP' ? ISP_COLORS : AE_COLORS;
+    let palette;
+    if (group === 'ISP') {
+      palette = ISP_COLORS;
+    } else if (isPrimary) {
+      palette = AE_PRIMARY_COLORS;
+    } else {
+      palette = AE_COLORS;
+    }
     if (palette[rep]) { colorCache[key] = palette[rep]; return palette[rep]; }
     const repLower = rep.toLowerCase();
     const match = Object.keys(palette).find(k => {
@@ -202,7 +227,8 @@
       const terr   = (r['Territory'] || '').trim();
       if (state && county && rep) {
         splitStates.add(state);
-        countyMap[state + '::' + county.toLowerCase().trim()] = { rep, terr };
+        const isPrimary = (r['Primary'] || '').trim().toUpperCase() === 'Y';
+        countyMap[state + '::' + county.toLowerCase().trim()] = { rep, terr, isPrimary };
       }
     });
 
@@ -239,7 +265,7 @@
       const rep  = stateRep[abbr]  || defaultRep  || '';
       const terr = stateTerr[abbr] || defaultTerr || '';
       tip(
-        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group)).attr('stroke', '#fff').attr('stroke-width', 0.8),
+        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group, false)).attr('stroke', '#fff').attr('stroke-width', 0.8),
         STATE_NAME[abbr] || f.properties.name, rep, terr
       );
     });
@@ -253,10 +279,11 @@
       const cName = (f.properties && f.properties.name) ? f.properties.name : '';
       if (!cName) return;
       const entry = countyMap[abbr + '::' + cName.toLowerCase()];
-      const rep   = entry ? entry.rep  : (defaultRep  || '');
-      const terr  = entry ? entry.terr : (defaultTerr || '');
+      const rep       = entry ? entry.rep       : (defaultRep  || '');
+      const terr      = entry ? entry.terr      : (defaultTerr || '');
+      const isPrimary = entry ? entry.isPrimary : false;
       tip(
-        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group)).attr('stroke', '#fff').attr('stroke-width', 0.3),
+        g.append('path').attr('d', geoPath(f)).attr('fill', colorFor(rep, group, isPrimary)).attr('stroke', '#fff').attr('stroke-width', 0.3),
         cName + ' County, ' + abbr, rep, terr
       );
     });
@@ -295,7 +322,7 @@
     seenReps.forEach((terr, rep) => {
       const item = document.createElement('span');
       item.className = 'legend-item';
-      item.innerHTML = `<span class="legend-swatch" style="background:${colorFor(rep, group)}"></span>${rep} <span style="color:#AAA89E;font-size:11px;margin-left:2px">(${terr})</span>`;
+      item.innerHTML = `<span class="legend-swatch" style="background:${colorFor(rep, group, false)}"></span>${rep} <span style="color:#AAA89E;font-size:11px;margin-left:2px">(${terr})</span>`;
       legendEl.appendChild(item);
     });
   }
