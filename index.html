@@ -215,7 +215,9 @@
         .map(([s]) => s)
     );
 
-    console.log('[v12] group:', group, '| splitStates:', Array.from(splitStates).sort().join(',') || 'none', '| countyMap keys sample:', Object.keys(countyMap).slice(0,3));
+    console.log('[v12] group:', group, '| splitStates:', Array.from(splitStates).sort().join(',') || 'none');
+    console.log('[v12] stateRep GA:', stateRep['GA'], '| FL:', stateRep['FL'], '| CT:', stateRep['CT'], '| defRep:', defRep);
+    console.log('[v12] terrRows parsed:', terrRows.length, 'rows, sample:', JSON.stringify(terrRows[2]));
     return { stateRep, stateTerr, defRep, defTerr, splitStates, countyMap };
   }
 
