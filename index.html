@@ -206,6 +206,12 @@
       const entry = { rep, terr, isPri };
       countyMap[state+'::'+clo] = entry;
       countyMap[state+'::'+clo.replace(/\s+/g,'')] = entry;
+      // Handle Miami-Dade / Miami Dade variants
+      if (clo.includes('miami')) {
+        countyMap[state+'::miami-dade'] = entry;
+        countyMap[state+'::miami dade'] = entry;
+        countyMap[state+'::miamidade'] = entry;
+      }
     });
 
     // Only mark as split if 2+ different reps for this group
@@ -257,7 +263,9 @@
       const cName = f.properties && f.properties.name ? f.properties.name : '';
       if (!cName) return;
       const clo   = cName.toLowerCase();
-      const entry = countyMap[abbr+'::'+clo] || countyMap[abbr+'::'+clo.replace(/\s+/g,'')];
+      const entry = countyMap[abbr+'::'+clo] ||
+                    countyMap[abbr+'::'+clo.replace(/\s+/g,'')] ||
+                    (clo.includes('miami') ? countyMap[abbr+'::miami-dade'] || countyMap[abbr+'::miami dade'] : null);
       if (!entry) return; // no entry = state base color handles it
       tip(
         g.append('path').attr('d',geoPath(f)).attr('fill',colorFor(entry.rep,group,entry.isPri)).attr('stroke','#fff').attr('stroke-width',0.3),
@@ -269,7 +277,7 @@
     statesGeo.forEach(f => {
       const abbr = NAME_TO_ABBR[f.properties.name];
       if (!abbr) return;
-      g.append('path').attr('d',geoPath(f)).attr('fill','none').attr('stroke','#000000').attr('stroke-width',2).attr('pointer-events','none');
+      g.append('path').attr('d',geoPath(f)).attr('fill','none').attr('stroke','#525252').attr('stroke-width',1).attr('pointer-events','none');
     });
 
     // Legend
